@@ -75,3 +75,6 @@ cdef class BlockingIOProtocol(protocol.SansIOProtocol):
 
     def sync_simple_query(self, *args, **kwargs):
         return self._iter_coroutine(self.simple_query(*args, **kwargs))
+
+    def sync_dump(self, *args, **kwargs):
+        return self._iter_coroutine(self.dump(*args, **kwargs))

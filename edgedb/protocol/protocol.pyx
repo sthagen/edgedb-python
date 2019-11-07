@@ -515,6 +515,53 @@ cdef class SansIOProtocol:
                 else:
                     return ret
 
+    async def dump(self):
+        cdef:
+            WriteBuffer buf
+            char mtype
+
+        if not self.connected:
+            raise RuntimeError('not connected')
+
+        self.reset_status()
+
+        buf = WriteBuffer.new_message(DUMP_MSG)
+        buf.write_int16(0)  # no headers
+        self.write(buf.end_message())
+
+        packet = WriteBuffer.new()
+        packet.write_buffer(buf)
+        packet.write_bytes(SYNC_MESSAGE)
+        self.write(packet)
+
+        exc = None
+
+        while True:
+            if not self.buffer.take_message():
+                await self.wait_for_message()
+            mtype = self.buffer.get_message_type()
+
+            try:
+                if mtype == DUMP_BLOCK_MSG:
+                    1/0
+
+                elif mtype == ERROR_RESPONSE_MSG:
+                    # ErrorResponse
+                    exc = self.parse_error_message()
+
+                elif mtype == READY_FOR_COMMAND_MSG:
+                    self.parse_sync_message()
+                    break
+
+                else:
+                    self.fallthrough()
+
+            finally:
+                self.buffer.finish_message()
+
+        if exc is not None:
+            raise exc
+
     def terminate(self):
         try:
             self.write(WriteBuffer.new_message(TERMINATE_MSG).end_message())
