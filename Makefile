@@ -20,7 +20,6 @@ clean:
 	rm -fr $(ROOT)/edgedb/datatypes/*.so
 	rm -fr $(ROOT)/edgedb/datatypes/datatypes.c
 	rm -fr $(ROOT)/build
-	rm -fr $(ROOT)/*.egg-info
 	rm -fr $(ROOT)/edgedb/protocol/codecs/*.html
 	find . -name '__pycache__' | xargs rm -rf
 
@@ -41,6 +40,7 @@ gen-errors:
 	edb gen-errors --import "from edgedb.errors._base import *" \
 		--extra-all "_base.__all__" --stdout --client > $(ROOT)/.errors
 	mv $(ROOT)/.errors $(ROOT)/edgedb/errors/__init__.py
+	$(PYTHON) tools/gen_init.py
 
 
 gen-types:
