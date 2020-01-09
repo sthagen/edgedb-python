@@ -56,6 +56,23 @@ cdef class CodecsRegistry:
     def __init__(self, *, cache_size=1000):
         self.codecs_build_cache = LRUMapping(maxsize=_CODECS_BUILD_CACHE_SIZE)
         self.codecs = LRUMapping(maxsize=cache_size)
+        self.base_codec_overrides = {}
+
+    def set_type_codec(self, typeid, *, encoder, decoder, format):
+        if format != 'python':
+            raise ValueError('"python" is the only valid format')
+        if not isinstance(typeid, uuid.UUID):
+            raise TypeError('typeid must be a UUID')
+        basecodec = BASE_SCALAR_CODECS.get(typeid.bytes)
+        if basecodec is None:
+            raise ValueError(
+                f'{typeid} does not correspond to any known base type')
+        self.base_codec_overrides[typeid.bytes] = CodecPythonOverride.new(
+            typeid.bytes,
+            basecodec,
+            encoder,
+            decoder,
+        )
 
     cdef BaseCodec _build_codec(self, FRBuffer *spec, list codecs_list):
         cdef:
@@ -63,7 +80,7 @@ cdef class CodecsRegistry:
             bytes tid = frb_read(spec, 16)[:16]
             uint16_t els
             uint16_t i
-            uint16_t str_len
+            uint32_t str_len
             uint16_t pos
             int32_t dim_len
             BaseCodec res
@@ -84,7 +101,7 @@ cdef class CodecsRegistry:
                 els = <uint16_t>hton.unpack_int16(frb_read(spec, 2))
                 for i in range(els):
                     frb_read(spec, 1)
-                    str_len = <uint16_t>hton.unpack_int16(frb_read(spec, 2))
+                    str_len = hton.unpack_uint32(frb_read(spec, 4))
                     # read the <str> (`str_len` bytes) and <pos> (2 bytes)
                     frb_read(spec, str_len + 2)
 
@@ -103,7 +120,7 @@ cdef class CodecsRegistry:
             elif t == CTYPE_NAMEDTUPLE:
                 els = <uint16_t>hton.unpack_int16(frb_read(spec, 2))
                 for i in range(els):
-                    str_len = <uint16_t>hton.unpack_int16(frb_read(spec, 2))
+                    str_len = hton.unpack_uint32(frb_read(spec, 4))
                     frb_read(spec, str_len + 2)
 
             elif t == CTYPE_ARRAY:
@@ -118,12 +135,12 @@ cdef class CodecsRegistry:
             elif t == CTYPE_ENUM:
                 els = <uint16_t>hton.unpack_int16(frb_read(spec, 2))
                 for i in range(els):
-                    str_len = <uint16_t>hton.unpack_int16(frb_read(spec, 2))
+                    str_len = hton.unpack_uint32(frb_read(spec, 4))
                     frb_read(spec, str_len)
 
             elif (t >= 0xf0 and t <= 0xff):
                 # Ignore all type annotations.
-                str_len = <uint16_t>hton.unpack_int16(frb_read(spec, 2))
+                str_len = hton.unpack_uint32(frb_read(spec, 4))
                 frb_read(spec, str_len)
 
             else:
@@ -145,7 +162,7 @@ cdef class CodecsRegistry:
             for i in range(els):
                 flag = <uint8_t>frb_read(spec, 1)[0]
 
-                str_len = <uint16_t>hton.unpack_int16(frb_read(spec, 2))
+                str_len = hton.unpack_uint32(frb_read(spec, 4))
                 name = cpythonx.PyUnicode_FromStringAndSize(
                     frb_read(spec, str_len), str_len)
                 pos = <uint16_t>hton.unpack_int16(frb_read(spec, 2))
@@ -163,7 +180,10 @@ cdef class CodecsRegistry:
             res = ObjectCodec.new(tid, names, flags, codecs)
 
         elif t == CTYPE_BASE_SCALAR:
-            res = <BaseCodec>BASE_SCALAR_CODECS[tid]
+            if tid in self.base_codec_overrides:
+                return self.base_codec_overrides[tid]
+            else:
+                res = <BaseCodec>BASE_SCALAR_CODECS[tid]
 
         elif t == CTYPE_SCALAR:
             pos = <uint16_t>hton.unpack_int16(frb_read(spec, 2))
@@ -191,7 +211,7 @@ cdef class CodecsRegistry:
             codecs = cpython.PyTuple_New(els)
             names = cpython.PyTuple_New(els)
             for i in range(els):
-                str_len = <uint16_t>hton.unpack_int16(frb_read(spec, 2))
+                str_len = hton.unpack_uint32(frb_read(spec, 4))
                 name = cpythonx.PyUnicode_FromStringAndSize(
                     frb_read(spec, str_len), str_len)
                 pos = <uint16_t>hton.unpack_int16(frb_read(spec, 2))
@@ -209,7 +229,7 @@ cdef class CodecsRegistry:
             els = <uint16_t>hton.unpack_int16(frb_read(spec, 2))
             names = cpython.PyTuple_New(els)
             for i in range(els):
-                str_len = <uint16_t>hton.unpack_int16(frb_read(spec, 2))
+                str_len = hton.unpack_uint32(frb_read(spec, 4))
                 name = cpythonx.PyUnicode_FromStringAndSize(
                     frb_read(spec, str_len), str_len)
 
@@ -231,7 +251,7 @@ cdef class CodecsRegistry:
 
         elif (t >= 0xf0 and t <= 0xff):
             # Ignore all type annotations.
-            str_len = <uint16_t>hton.unpack_int16(frb_read(spec, 2))
+            str_len = hton.unpack_uint32(frb_read(spec, 4))
             frb_read(spec, str_len)
             return
 
