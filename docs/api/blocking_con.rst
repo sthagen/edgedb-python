@@ -22,8 +22,10 @@ Connection
     Establish a connection to an EdgeDB server.
 
     :param dsn:
-        Connection arguments specified using as a single string in the
-        connection URI format:
+        If this parameter does not start with ``edgedb://`` then this is
+        a :ref:`name of an instance <edgedb-instances>`.
+
+        Otherwise it specifies a single string in the connection URI format:
         ``edgedb://user:password@host:port/database?option=value``.
         The following options are recognized: host, port,
         user, database, password.
@@ -125,7 +127,7 @@ Connection
             An instance of :py:class:`edgedb.Set <edgedb.Set>` containing
             the query result.
 
-        Note, that positional and named query arguments cannot be mixed.
+        Note that positional and named query arguments cannot be mixed.
 
 
     .. py:method:: query_one(query, *args, **kwargs)
@@ -224,6 +226,10 @@ Connection
             ...     UNION INSERT MyType { a := x };
             ... ''')
 
+        .. note::
+            If the results of *query* are desired, :py:meth:`query` or
+            :py:meth:`query_one` should be used instead.
+
 
     .. py:method:: transaction(isolation=None, readonly=None, deferrable=None)
 
@@ -319,7 +325,7 @@ See also the
 
     .. py:method:: start()
 
-        Enter the trasnaction or savepoint block.
+        Enter the transaction or savepoint block.
 
     .. py:method:: commit()
 

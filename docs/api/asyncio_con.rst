@@ -28,9 +28,11 @@ Connection
 
     Returns a new :py:class:`AsyncIOConnection` object.
 
-    :param dsn:
-        Connection arguments specified using as a single string in the
-        connection URI format:
+    :param str dsn:
+        If this parameter does not start with ``edgedb://`` then this is
+        a :ref:`name of an instance <edgedb-instances>`.
+
+        Otherwise it specifies a single string in the following format:
         ``edgedb://user:password@host:port/database?option=value``.
         The following options are recognized: host, port,
         user, database, password.
@@ -129,7 +131,7 @@ Connection
             An instance of :py:class:`edgedb.Set <edgedb.Set>` containing
             the query result.
 
-        Note, that positional and named query arguments cannot be mixed.
+        Note that positional and named query arguments cannot be mixed.
 
 
     .. py:coroutinemethod:: query_one(query, *args, **kwargs)
@@ -228,6 +230,10 @@ Connection
             ...     UNION INSERT MyType { a := x };
             ... ''')
 
+        .. note::
+            If the results of *query* are desired, :py:meth:`query` or
+            :py:meth:`query_one` should be used instead.
+
 
     .. py:method:: transaction(isolation=None, readonly=None, deferrable=None)
 
@@ -323,7 +329,7 @@ See also the
 
     .. py:coroutinemethod:: start()
 
-        Enter the trasnaction or savepoint block.
+        Enter the transaction or savepoint block.
 
     .. py:coroutinemethod:: commit()
 
@@ -363,7 +369,7 @@ Connection Pools
         :py:class:`AsyncIOConnection`.
 
     :param int min_size:
-        Number of connection the pool will be initialized with.
+        Number of connections the pool will be initialized with.
 
     :param int max_size:
         Max number of connections in the pool.
@@ -405,7 +411,7 @@ Connection Pools
 
     A connection pool.
 
-    Connection pool can be used to manage a set of connections to the database.
+    A connection pool can be used to manage a set of connections to the database.
     Connections are first acquired from the pool, then used, and then released
     back to the pool.  Once a connection is released, it's reset to close all
     open cursors and other resources *except* prepared statements.
@@ -472,8 +478,10 @@ Connection Pools
         Set the new connection arguments for this pool.
 
         :param str dsn:
-            Connection arguments specified using as a single string in
-            the following format:
+            If this parameter does not start with ``edgedb://`` then this is
+            a :ref:`name of an instance <edgedb-instances>`.
+
+            Otherwise it specifies a single string in the following format:
             ``edgedb://user:pass@host:port/database?option=value``.
 
         :param \*\*connect_kwargs:
@@ -489,7 +497,7 @@ Connection Pools
     .. py:coroutinemethod:: query(query, *args, **kwargs)
 
         Acquire a connection and use it to run a query and return the results
-        as a :py:class:`edgedb.Set <edgedb.Set>` instance. The temporary
+        as an :py:class:`edgedb.Set <edgedb.Set>` instance. The temporary
         connection is automatically returned back to the pool.
 
         See :py:meth:`AsyncIOConnection.query()
@@ -530,3 +538,15 @@ Connection Pools
 
         See :py:meth:`AsyncIOConnection.execute()
         <edgedb.AsyncIOConnection.execute>` for details.
+
+    .. py:attribute:: min_size
+
+        Number of connections the pool was initialized with.
+
+    .. py:attribute:: max_size
+
+        Max number of connections in the pool.
+
+    .. py:attribute:: free_size
+
+        Number of available connections in the pool.

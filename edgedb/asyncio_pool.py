@@ -291,8 +291,8 @@ class AsyncIOPool:
                  '_on_acquire', '_on_release')
 
     def __init__(self, *connect_args,
-                 min_size,
-                 max_size,
+                 min_size: int,
+                 max_size: int,
                  on_acquire,
                  on_release,
                  on_connect,
@@ -340,6 +340,28 @@ class AsyncIOPool:
         self._on_connect = on_connect
         self._connect_args = connect_args
         self._connect_kwargs = connect_kwargs
+
+    @property
+    def min_size(self) -> int:
+        """Number of connection the pool was initialized with."""
+
+        return self._minsize
+
+    @property
+    def max_size(self) -> int:
+        """Max number of connections in the pool."""
+
+        return self._maxsize
+
+    @property
+    def free_size(self) -> int:
+        """Number of available connections in the pool."""
+
+        if self._queue is None:
+            # Queue has not been initialized yet
+            return self._maxsize
+
+        return self._queue.qsize()
 
     async def _async__init__(self):
         if self._initialized:
@@ -744,8 +766,10 @@ def create_async_pool(dsn=None, *,
             await pool.release(con)
 
     :param str dsn:
-        Connection arguments specified using as a single string in
-        the following format:
+        If this parameter does not start with ``edgedb://`` then this is
+        a :ref:`name of an instance <edgedb-instances>`.
+
+        Otherwies it specifies as a single string in the following format:
         ``edgedb://user:pass@host:port/database?option=value``.
 
     :param \*\*connect_kwargs:
