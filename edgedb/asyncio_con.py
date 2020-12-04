@@ -69,6 +69,8 @@ class AsyncIOConnection(base_con.BaseConnection,
         query: str,
         *args,
         __limit__: int=0,
+        __typeids__: bool=False,
+        __typenames__: bool=False,
         **kwargs,
     ) -> datatypes.Set:
         return await self._protocol.execute_anonymous(
@@ -78,6 +80,8 @@ class AsyncIOConnection(base_con.BaseConnection,
             reg=self._codecs_registry,
             qc=self._query_cache,
             implicit_limit=__limit__,
+            inline_typeids=__typeids__,
+            inline_typenames=__typenames__,
             io_format=protocol.IoFormat.BINARY,
         )
 
@@ -95,6 +99,7 @@ class AsyncIOConnection(base_con.BaseConnection,
             reg=self._codecs_registry,
             qc=self._query_cache,
             implicit_limit=__limit__,
+            inline_typenames=False,
             io_format=protocol.IoFormat.JSON,
         )
 
@@ -266,7 +271,7 @@ async def _connect_addr(*, addr, loop, timeout, params, config,
     try:
         tr, pr = await asyncio.wait_for(
             connector, timeout=timeout)
-    except (ConnectionError, FileNotFoundError, OSError) as e:
+    except OSError as e:
         msg = con_utils.render_client_no_connection_error(e, addr)
         raise errors.ClientConnectionError(msg) from e
 
@@ -316,7 +321,7 @@ async def async_connect(dsn: str = None, *,
                 addr=addr, loop=loop, timeout=timeout,
                 params=params, config=config,
                 connection_class=connection_class)
-        except (OSError, asyncio.TimeoutError, ConnectionError,
+        except (OSError, asyncio.TimeoutError,
                 errors.ClientConnectionError) as ex:
             last_error = ex
         else:

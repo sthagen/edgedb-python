@@ -28,8 +28,7 @@ from . import errors
 from . import transaction
 
 from .datatypes import datatypes
-from .protocol import blocking_proto
-from .protocol import protocol
+from .protocol import blocking_proto, protocol
 
 
 class BlockingIOConnection(base_con.BaseConnection):
@@ -65,6 +64,7 @@ class BlockingIOConnection(base_con.BaseConnection):
         query: str,
         *args,
         __limit__: int=0,
+        __typenames__: bool=False,
         **kwargs,
     ) -> datatypes.Set:
         return self._protocol.sync_execute_anonymous(
@@ -74,6 +74,7 @@ class BlockingIOConnection(base_con.BaseConnection):
             reg=self._codecs_registry,
             qc=self._query_cache,
             implicit_limit=__limit__,
+            inline_typenames=__typenames__,
             io_format=protocol.IoFormat.BINARY,
         )
 
@@ -91,6 +92,7 @@ class BlockingIOConnection(base_con.BaseConnection):
             reg=self._codecs_registry,
             qc=self._query_cache,
             implicit_limit=__limit__,
+            inline_typenames=False,
             io_format=protocol.IoFormat.JSON,
         )
 
@@ -259,8 +261,7 @@ def connect(dsn: str = None, *,
                 addr=addr, timeout=timeout,
                 params=params, config=config,
                 connection_class=BlockingIOConnection)
-        except (OSError, TimeoutError, ConnectionError, socket.error,
-                errors.ClientConnectionError) as ex:
+        except (OSError, socket.error, errors.ClientConnectionError) as ex:
             last_error = ex
         else:
             return con
