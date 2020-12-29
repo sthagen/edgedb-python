@@ -17,11 +17,13 @@
 #
 
 
+import abc
 import asyncio
 import time
 import typing
 import warnings
 
+from . import abstract
 from . import base_con
 from . import con_utils
 from . import errors
@@ -37,7 +39,7 @@ class _ConnectionProxy:
     __slots__ = ()
 
 
-class AsyncIOConnectionMeta(type):
+class AsyncIOConnectionMeta(abc.ABCMeta):
 
     def __instancecheck__(cls, instance):
         mro = type(instance).__mro__
@@ -45,6 +47,7 @@ class AsyncIOConnectionMeta(type):
 
 
 class AsyncIOConnection(base_con.BaseConnection,
+                        abstract.AsyncIOExecutor,
                         metaclass=AsyncIOConnectionMeta):
 
     def __init__(self, transport, protocol, loop, addr, config, params, *,
@@ -71,8 +74,33 @@ class AsyncIOConnection(base_con.BaseConnection,
         __limit__: int=0,
         __typeids__: bool=False,
         __typenames__: bool=False,
+        __allow_capabilities__: typing.Optional[int]=None,
         **kwargs,
     ) -> datatypes.Set:
+        result, _ = await self._protocol.execute_anonymous(
+            query=query,
+            args=args,
+            kwargs=kwargs,
+            reg=self._codecs_registry,
+            qc=self._query_cache,
+            implicit_limit=__limit__,
+            inline_typeids=__typeids__,
+            inline_typenames=__typenames__,
+            io_format=protocol.IoFormat.BINARY,
+            allow_capabilities=__allow_capabilities__,
+        )
+        return result
+
+    async def _fetchall_with_headers(
+        self,
+        query: str,
+        *args,
+        __limit__: int=0,
+        __typeids__: bool=False,
+        __typenames__: bool=False,
+        __allow_capabilities__: typing.Optional[int]=None,
+        **kwargs,
+    ) -> typing.Tuple[datatypes.Set, typing.Dict[int, bytes]]:
         return await self._protocol.execute_anonymous(
             query=query,
             args=args,
@@ -83,6 +111,7 @@ class AsyncIOConnection(base_con.BaseConnection,
             inline_typeids=__typeids__,
             inline_typenames=__typenames__,
             io_format=protocol.IoFormat.BINARY,
+            allow_capabilities=__allow_capabilities__,
         )
 
     async def _fetchall_json(
@@ -92,7 +121,7 @@ class AsyncIOConnection(base_con.BaseConnection,
         __limit__: int=0,
         **kwargs,
     ) -> datatypes.Set:
-        return await self._protocol.execute_anonymous(
+        result, _ = await self._protocol.execute_anonymous(
             query=query,
             args=args,
             kwargs=kwargs,
@@ -102,9 +131,10 @@ class AsyncIOConnection(base_con.BaseConnection,
             inline_typenames=False,
             io_format=protocol.IoFormat.JSON,
         )
+        return result
 
     async def query(self, query: str, *args, **kwargs) -> datatypes.Set:
-        return await self._protocol.execute_anonymous(
+        result, _ = await self._protocol.execute_anonymous(
             query=query,
             args=args,
             kwargs=kwargs,
@@ -112,9 +142,10 @@ class AsyncIOConnection(base_con.BaseConnection,
             qc=self._query_cache,
             io_format=protocol.IoFormat.BINARY,
         )
+        return result
 
     async def query_one(self, query: str, *args, **kwargs) -> typing.Any:
-        return await self._protocol.execute_anonymous(
+        result, _ = await self._protocol.execute_anonymous(
             query=query,
             args=args,
             kwargs=kwargs,
@@ -123,9 +154,10 @@ class AsyncIOConnection(base_con.BaseConnection,
             expect_one=True,
             io_format=protocol.IoFormat.BINARY,
         )
+        return result
 
     async def query_json(self, query: str, *args, **kwargs) -> str:
-        return await self._protocol.execute_anonymous(
+        result, _ = await self._protocol.execute_anonymous(
             query=query,
             args=args,
             kwargs=kwargs,
@@ -133,10 +165,11 @@ class AsyncIOConnection(base_con.BaseConnection,
             qc=self._query_cache,
             io_format=protocol.IoFormat.JSON,
         )
+        return result
 
     async def _fetchall_json_elements(
             self, query: str, *args, **kwargs) -> typing.List[str]:
-        return await self._protocol.execute_anonymous(
+        result, _ = await self._protocol.execute_anonymous(
             query=query,
             args=args,
             kwargs=kwargs,
@@ -144,9 +177,10 @@ class AsyncIOConnection(base_con.BaseConnection,
             qc=self._query_cache,
             io_format=protocol.IoFormat.JSON_ELEMENTS,
         )
+        return result
 
     async def query_one_json(self, query: str, *args, **kwargs) -> str:
-        return await self._protocol.execute_anonymous(
+        result, _ = await self._protocol.execute_anonymous(
             query=query,
             args=args,
             kwargs=kwargs,
@@ -155,6 +189,7 @@ class AsyncIOConnection(base_con.BaseConnection,
             expect_one=True,
             io_format=protocol.IoFormat.JSON,
         )
+        return result
 
     async def execute(self, query: str) -> None:
         """Execute an EdgeQL command (or commands).

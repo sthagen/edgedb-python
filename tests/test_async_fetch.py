@@ -17,7 +17,6 @@
 #
 
 
-import asyncio
 import datetime
 import decimal
 import json
@@ -25,6 +24,7 @@ import random
 import unittest
 import uuid
 
+import asyncio
 import edgedb
 
 from edgedb import _taskgroup as tg
@@ -733,34 +733,46 @@ class TestAsyncFetch(tb.AsyncQueryTestCase):
                 arg="10.2")
 
     async def test_async_wait_cancel_01(self):
+        underscored_lock = await self.con.query_one("""
+            SELECT EXISTS(
+                SELECT schema::Function FILTER .name = 'sys::_advisory_lock'
+            )
+        """)
+        if not underscored_lock:
+            self.skipTest("No sys::_advisory_lock function")
+
         # Test that client protocol handles waits interrupted
         # by closing.
         lock_key = tb.gen_lock_key()
 
         con2 = await self.connect(database=self.con.dbname)
 
-        await self.con.query_one(
-            'select sys::advisory_lock(<int64>$0)',
-            lock_key)
+        async with self.con.transaction():
+            await self.con.query_one(
+                'select sys::_advisory_lock(<int64>$0)',
+                lock_key)
 
-        try:
-            async with tg.TaskGroup() as g:
+            try:
+                async with tg.TaskGroup() as g:
 
-                async def exec_to_fail():
-                    with self.assertRaises(ConnectionAbortedError):
-                        await con2.query(
-                            'select sys::advisory_lock(<int64>$0)', lock_key)
+                    async def exec_to_fail():
+                        with self.assertRaises(ConnectionAbortedError):
+                            async with con2.transaction():
+                                await con2.query(
+                                    'select sys::_advisory_lock(<int64>$0)',
+                                    lock_key,
+                                )
 
-                g.create_task(exec_to_fail())
+                    g.create_task(exec_to_fail())
 
-                await asyncio.sleep(0.1)
-                await con2.aclose()
+                    await asyncio.sleep(0.1)
+                    await con2.aclose()
 
-        finally:
-            self.assertEqual(
-                await self.con.query(
-                    'select sys::advisory_unlock(<int64>$0)', lock_key),
-                [True])
+            finally:
+                self.assertEqual(
+                    await self.con.query(
+                        'select sys::_advisory_unlock(<int64>$0)', lock_key),
+                    [True])
 
     async def test_empty_set_unpack(self):
         await self.con.query_one('''
@@ -813,3 +825,28 @@ class TestAsyncFetch(tb.AsyncQueryTestCase):
         self.assertEqual(
             await self.con._fetchall_json_elements('SELECT {"aaa", "bbb"}'),
             edgedb.Set(['"aaa"', '"bbb"']))
+
+    async def test_async_cancel_01(self):
+        has_sleep = await self.con.query_one("""
+            SELECT EXISTS(
+                SELECT schema::Function FILTER .name = 'sys::_sleep'
+            )
+        """)
+        if not has_sleep:
+            self.skipTest("No sys::_sleep function")
+
+        con = await self.connect(database=self.con.dbname)
+
+        try:
+            self.assertEqual(await con.query_one('SELECT 1'), 1)
+
+            with self.assertRaises(asyncio.TimeoutError):
+                await asyncio.wait_for(
+                    con.query_one('SELECT sys::_sleep(10)'),
+                    timeout=0.1)
+
+            with self.assertRaisesRegex(
+                    edgedb.ClientConnectionError, 'opertation was cancelled'):
+                await con.query('SELECT 2')
+        finally:
+            await con.aclose()
